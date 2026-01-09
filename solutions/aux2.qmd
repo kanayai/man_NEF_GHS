@@ -1,0 +1,572 @@
+---
+title: "Untitled"
+format: html
+---
+
+
+
+The gradient of the log density is given by:
+ 
+$$
+\begin{split}
+\nabla_{\!\bm{\lambda}} \log f(y|\bm{\lambda})
+&=
+\begin{pmatrix}
+\displaystyle\frac{d}{d\lambda_1}\log f(y|\bm{\lambda}) \\
+\displaystyle\frac{d}{d\lambda_2}\log f(y|\bm{\lambda})
+\end{pmatrix}
+\\
+\rule{0in}{7ex}&=
+\begin{pmatrix}
+\displaystyle y-\lambda_2 \tan(\lambda_1) \\
+\displaystyle \log 2+\psi\left(\frac{\lambda_2}{2}\right)-\psi(\lambda_2)+2\sum_{j=0}^N\frac{y^2}{(\lambda_2+2j)[y^2 +(\lambda_2+2j)^2]}+
+\log(\cos(\lambda_1))
+\end{pmatrix}
+\end{split}
+$$
+
+Therefore, the gradient of the loglikelihood is given by
+
+$$
+\nabla_{\!\bm{\lambda}} \ell(\bm{\lambda}|\bm{y})
+=
+\begin{pmatrix}
+\displaystyle \sum_{i=1}^n y_i-n\,\lambda_2 \tan(\lambda_1) \\
+\displaystyle n\, \log 2+- n\,\psi\left(\frac{\lambda_2}{2}\right)-n\,\psi(\lambda_2)+2\sum_{i=1}^n\sum_{j=0}^N\frac{y_i^2}{(\lambda_2+2j)[y_i^2 +(\lambda_2+2j)^2]}+
+n\,\log(\cos(\lambda_1))
+\end{pmatrix}
+$$
+
+
+We now code the negative loglikelihood function in a format suitable for `optim`
+
+```{r}
+
+nll <-  function(par,y,N=1000){
+  
+  lambda1 <- par[1]
+  lambda2 <- par[2]
+  
+  nll_plot(lambda1,lambda2,y,N)
+  
+}
+
+
+```
+
+Also code the gradient of negative loglikelihood function in a format suitable for `optim`
+
+```{r}
+
+grad_nll <- function(par,y,N=1000){
+  
+  lambda1 <- par[1]
+  lambda2 <- par[2]
+  
+  log_der_neg_dghs <- function(y,lambda1,lambda2,N){
+  
+  aux <- function(y,lambda1,lambda2,N){
+    res1<- 
+    log(2)+
+       digamma(lambda2/2)-
+        digamma(lambda2)+
+          2*sum((y^2)/((lambda2+2*(0:N))*(y^2+(lambda2+2*(0:N))^2)))+
+            log(cos(lambda1))
+    c(y-lambda2*tan(lambda1),res1)
+  }
+  
+  -rowSums(sapply(y,
+          FUN = aux,
+          lambda1 = lambda1,
+          lambda2 = lambda2,
+          N   = N))
+  
+}
+  
+  mapply(lambda1,
+         lambda2,
+         FUN = log_der_neg_dghs,
+         MoreArgs = list(y = y,
+                         N = N))
+  
+}
+
+```
+
+
+
+
+
+
+
+
+## Question 5 
+
+Compute an asymptotic 95% confidence interval for the unknown parameter $\lambda^*_2$
+
+* Using the asymptotic normal approximation of $\hat{\lambda}_2$
+
+* Using the asymptotic normal approximation of $\log( \hat{\lambda}_2)$
+
+
+
+
+
+## Solution to Question 5
+
+Using the asymptotic normal approximation of $\hat{\lambda}_2$ we have
+
+```{r}
+
+V <-solve(I_obs)[2,2]
+
+# conf int
+
+c(lambda2_hat-1.9599*sqrt(V),lambda2_hat+1.9599*sqrt(V))
+
+```
+
+
+Using the asymptotic normal approximation of $\log(\hat{\lambda}_2)$ we can use the delta method with $g(\bm{\lambda})=\log(\lambda_2)$ and the Jacobian is now
+$$\bm{J}_g((\bm{\lambda})=(0,1/\lambda_2)$$
+therefore we have
+
+```{r}
+
+J<-c(0,1/lambda2_hat)
+
+V <-as.numeric(J%*% solve(I_obs)%*%(J))
+
+# conf int
+
+exp(c(log(lambda2_hat)-1.9599*sqrt(V),log(lambda2_hat)+1.9599*sqrt(V)))
+
+```
+
+The  intervals a re a bit different but we tend to like the asymmetric one constructed using $\log(\lambda_2)$ as this one will always be positive while the other one might negative of $lambda_2 $ is close enough to zero.
+
+
+## Question 6 
+
+
+Use the generalised likelihood ratio to test the hypotheses:
+
+$$H_0:\,\mu(\bm{\lambda}_*)=5\qquad \mbox{vs}\qquad H_a:\,\mu(\bm{\lambda}_*)\neq 5$$
+
+using a significance level $\alpha=0.05$.
+
+Separately, also test 
+
+$$H_0:\,\lambda^*_2=5\qquad \mbox{vs}\qquad H_a:\,\lambda^*_2\neq 5$$
+
+using a significance level $\alpha=0.05$.
+
+
+## Solution to Question 6
+
+
+
+```{r}
+nll_theta2 <- function(theta2,y,N=10000,mu){
+  
+  par_old<-c(atan(mu*exp(-theta2)),exp(theta2))
+  
+  nll(par_old,y=y,N=N)
+}
+log(lambda2_hat)
+fit_q6<-optimise(nll_theta2,c(0,3),y=y_sample_q1,N=10000,mu=5)
+fit_q6
+
+
+```
+
+```{r}
+glrt <-2*(-fit_q1$value+fit_q6$objective)
+glrt
+
+crit_val <-qchisq(0.95,1)
+
+# reject?
+
+glrt>crit_val
+```
+
+We do not reject the null hypothesis. 
+This is expected from the plots below.
+
+
+```{r}
+
+t2 <- seq(1.5,2,length=1000)
+nll_mu <-rep(NA, 1000)
+
+
+
+for (i in 1:1000){
+nll_mu[i]<- nll_theta2(t2[i],y_sample_q1,mu=5)
+}
+
+par(mfrow=c(1,2))
+
+plot(t2,nll_mu,type="l")
+abline(v=log(lambda2_hat),col="grey")
+abline(v=fit_q6$minimum,col="red")
+
+contour(x      = lambda1_grid,
+        y      = theta2_grid,
+        z      = nll_grid,
+        levels = levels,
+        xlab   = expression(lambda[1]),
+        ylab   = expression(lambda[2]))
+
+
+ t2<-seq(-2,20,length=100)
+ x=atan(5/exp(t2))
+ y<-exp(t2)
+ lines(x,y,col="green")
+
+```
+
+
+On the left we have the comparison between the MLE of $\theta_2$ when $\mu=5$ (red) to when $\mu$ is unrestricted, the difference is very small both in terms of the actual estimate and the difference in negative loglikelihood.
+
+On the right we have the green line that represents all the parameter values in the $\bm{\lambda}$ parametrisation that satisfy the null hypothesis of $\mu=5$. The smaller contour value cross this green line which gives evidence towards the null hypothesis.
+
+## Question 7 
+
+Consider the following  data frame
+
+```{r}
+#| code-fold: show
+data_q7 <-read.table("http://people.bath.ac.uk/kai21/ASI/CW_2023/data_q7.txt")
+
+```
+that contains a bivariate sample 
+$$(x_1,y_1),\,(x_2,y_2),\,\ldots,\,(x_n,y_n)$$
+of size $n=300$.
+
+
+
+
+Use the parametric family $\mathcal F_1$ defined in Question 1 to find an appropriate model for the unknown conditional distribution of $\mathcal Y$ given $\mathcal X=x$, that is $f_*(y|x)$. 
+The model should be defined by  specifying the mean function $\mu(\bm{\theta}^{(1)},x)$ as follows:
+
+$$
+\mu(\bm{\theta}^{(1)},x) =g^{-1}(\theta_1+\theta_2\,x +\theta_3\,x^2+\theta_4\,x^3 +\cdots+\theta_{p+1}\,x^p)
+$$
+
+for some choice of link function $g$ and some choice of integer $p\geq 1$.
+
+
+From a set of candidate models (that is for different choices of $g$ and $p$),  choose the model with the smallest AIC (Akaike Information Criterion). Only present the results from the maximum likelihood estimation from the best chosen model and simply comment on the other models considered.
+
+Now, repeat the same process  above to find an appropriate model for the unknown conditional distribution of $\mathcal Y$ given $\mathcal X=x$ but now based on the Gamma parametric family:
+
+$$
+\mathcal F_{gamma}=\left\{f(y|\lambda_1,\lambda_2)=\frac{\lambda_2^{\lambda_1}}{\Gamma(\lambda_1)}y^{\lambda_1-1}\exp(-\lambda_2\,y)\,:\, \lambda_1>0\,,\lambda_2>0,y>0\right\}
+$$
+
+Finally, find an appropriate model for the unknown conditional distribution of $\mathcal Y$ given $\mathcal X=x$
+but now based on the Normal parametric family:
+
+$$
+\mathcal F_{normal}=\left\{f(y|\lambda_1,\lambda_2)=\frac{1}{\lambda_2\sqrt{2\pi}}\,\exp\left(-\frac{(y-\lambda_1)^2}{2\lambda_2^2}\right)\,:\, \lambda_1\in \rel,\,\lambda_2>0,y\in \rel\right\}
+$$
+
+
+For each of the three chosen models, you should plot the data together with the maximum likelihood estimate of the mean function as well as corresponding asymptotic 95\% confidence bands in the range $x\in(-3,3)$. Comment on the differences between the confidence bands and the mean function estimates. You must select the best model out of the three, based on the Akaike  Information Criterion. 
+
+
+## Solution to Question 7 
+
+In all cases we will use the following mean function
+$$\mu(\bm{\theta},x)=\theta_1+\theta_2\,x+\theta_3\,x^2$$
+which captures the trend well.
+
+First the GHS model. We start by reparametrising $\theta_4 = \log(\lambda_2)$
+
+The induced negative loglikelihood is coded below:
+
+
+
+```{r}
+expr_log_dens_reg <- 
+  expression(
+    (
+      atan((theta1+theta2*x+theta3*(x^2))*exp(-theta4))*y+exp(theta4)*log(cos(atan((theta1+theta2*x+theta3*(x^2))*exp(-theta4))))+
+        (exp(theta4)-2)*log(2)+
+          2*lgamma(exp(theta4)/2)-
+            log(pi)-
+              lgamma(exp(theta4)))/(N+1)-
+                log(1+((y/(exp(theta4)+2*j))^2))
+    )
+
+
+deriv_log_dens_reg <- deriv(expr   = expr_log_dens_reg,
+                  namevec      = c("theta1","theta2","theta3","theta4"),
+                  function.arg = c("theta1","theta2","theta3","theta4","x","y","j","N"),
+                  hessian      = F)
+
+nll_reg    <- function(theta = c(1,1,1,1),
+                      x = 1, 
+                     y     = 1,
+                     N     = 1000){
+  
+
+   
+  n    <- length(y)
+  nld <- rep(NA,n)
+  
+  for (i in 1:n){
+    aux  <- deriv_log_dens_reg(theta1  = theta[1],
+                           theta2  = theta[2],
+                           theta3  = theta[3],
+                           theta4  = theta[4],
+                                y  = y[i],
+                                x = x[i],
+                                j  = 0:N,
+                                N = N)
+  
+    nld[i] <- sum(as.numeric(aux))
+  
+  }
+ -sum(nld)
+  
+}
+
+
+
+
+grad_nll_reg<- function(theta = c(1,1,1,1),
+                      x = 1, 
+                     y     = 1,
+                     N     = 1000){
+  
+  n    <- length(y)
+  grad <- matrix(NA,n,4)
+  
+  for (i in 1:n){
+    aux  <- deriv_log_dens_reg(theta1  = theta[1],
+                           theta2  = theta[2],
+                           theta3  = theta[3],
+                           theta4  = theta[4],
+                                y  = y[i],
+                                x = x[i],
+                                j  = 0:N,
+                                N = N)
+  
+    grad[i,1:4] <- apply(attr(aux,"gradient"),2,sum)
+  
+  }
+ -colSums(grad)
+ 
+}
+
+
+```
+
+```{r}
+fit_q7<-optim(c(20,0,1,1),
+                     fn = nll_reg,
+                     gr = grad_nll_reg,
+                  x = data_q7$x,
+                     y = data_q7$y,
+                     N = 1000,
+              hessian = T)
+fit_q7$par
+lm(y~x+I(x^2),data_q7)
+
+
+plot(y~x,data_q7)
+
+n_grid <- 100
+xx <- seq(-3,3,length=n_grid)
+yy<-fit_q7$par[1]+fit_q7$par[2]*xx+fit_q7$par[3]*xx^2
+
+lines(xx,yy)
+
+
+
+
+
+
+mean_ghs   <-rep(NA,n_grid)
+
+
+
+ci_ghs <- matrix(NA,
+             nrow = n_grid,
+             ncol = 2)
+
+
+
+
+for (i in 1:n_grid){
+  # normal
+  vec.x              <- c(1,xx[i],xx[i]^2)  
+  est_ghs    <- crossprod(vec.x,fit_q7$par[1:3])
+  se_ghs      <- sqrt(crossprod(vec.x,solve(fit_q7$hessian)[1:3,1:3])%*%vec.x)
+  mean_ghs[i] <- est_ghs
+  ci_ghs[i,]  <-c(est_ghs-1.96*se_ghs,est_ghs+1.96*se_ghs)
+  
+  
+}
+
+
+lines(xx, mean_ghs,    col="red",lty=2)
+lines(xx,  ci_ghs[,1],col="red")
+lines(xx,  ci_ghs[,2],col="red")
+
+  
+
+```
+
+Now for the gamma
+
+
+
+```{r}
+expr_log_dens_reg_gamma <- 
+  expression(
+     exp(theta4)*theta4-
+       lgamma(exp(theta4))+
+        (exp(theta4)-1)*log(y)-
+          exp(theta4)*log(theta1+theta2*x+theta3*(x^2))-
+            exp(theta4)*y/(theta1+theta2*x+theta3*(x^2))
+    )
+
+
+deriv_log_dens_reg_gamma <- deriv(expr   = expr_log_dens_reg_gamma,
+                  namevec      = c("theta1","theta2","theta3","theta4"),
+                  function.arg = c("theta1","theta2","theta3","theta4","x","y"),
+                  hessian      = F)
+
+nll_reg_gamma    <- function(theta = c(1,1,1,1),
+                      x = 1, 
+                     y     = 1){
+  
+
+   
+    aux  <- deriv_log_dens_reg_gamma(theta1  = theta[1],
+                           theta2  = theta[2],
+                           theta3  = theta[3],
+                           theta4  = theta[4],
+                                y  = y,
+                                x = x)
+ 
+  
+     -sum(as.numeric(aux))
+
+}
+
+
+
+
+grad_nll_reg_gamma<- function(theta = c(1,1,1,1),
+                      x = 1, 
+                     y     = 1){
+  
+
+    aux  <- deriv_log_dens_reg_gamma(theta1  = theta[1],
+                           theta2  = theta[2],
+                           theta3  = theta[3],
+                           theta4  = theta[4],
+                                y  = y,
+                                x = x)
+  
+  -apply(attr(aux,"gradient"),2,sum)
+  
+  
+ 
+}
+
+
+```
+
+```{r}
+fit_q7_gamma<-optim(c(20,0,1,0.1),
+                     fn = nll_reg_gamma,
+                     gr = grad_nll_reg_gamma,
+                  x = data_q7$x,
+                     y = data_q7$y,
+              hessian = T)
+
+fit_q7$par
+fit_q7_gamma$par
+
+
+plot(y~x,data_q7)
+
+n_grid <- 100
+xx <- seq(-3,3,length=n_grid)
+yy<-fit_q7_gamma$par[1]+fit_q7_gamma$par[2]*xx+fit_q7_gamma$par[3]*xx^2
+
+lines(xx,yy)
+
+
+
+mean_gamma   <-rep(NA,n_grid)
+
+
+mean_normal   <-rep(NA,n_grid)
+
+
+ci_gamma <- matrix(NA,
+             nrow = n_grid,
+             ncol = 2)
+
+
+ci_normal <- matrix(NA,
+             nrow = n_grid,
+             ncol = 2)
+
+fit_q7_normal_lm <-lm(y~x+I(x^2),data_q7)
+
+fit_q7_normal<-predict(fit_q7_normal_lm,newdata=data.frame(x=xx),interval="confidence",se.fit=T,type="response")
+
+for (i in 1:n_grid){
+  # normal
+  
+  mean_normal[i] <- fit_q7_normal$fit[i,1]
+  ci_normal[i,]  <-fit_q7_normal$fit[i,2:3]
+  
+  
+}
+
+
+lines(xx, mean_gamma,    col="blue",lty=2)
+lines(xx,  ci_gamma[,1], col="blue")
+lines(xx,  ci_gamma[,2], col="blue")
+
+lines(xx, mean_ghs,    col="red",lty=2)
+lines(xx,  ci_ghs[,1], col="red")
+lines(xx,  ci_ghs[,2], col="red")
+
+lines(xx,mean_normal,    col="black",lty=2)
+lines(xx,  ci_normal[,1], col="black")
+lines(xx,  ci_normal[,2], col="black")
+
+
+
+AIC(fit_q7_normal_lm)
+
+2*(fit_q7_gamma$value+4)
+2*(fit_q7$value+4)
+```
+We can see there is no great visual difference in the confidence bands for the mean functions. According to the AIC the best model is the GHS.
+
+## Question 8 
+
+
+Use the data in Question 7  to compute 95\% confidence intervals for the least worse value of the mean function  at each $x$, that is $\mu(\bm{\theta}^{(1)}_\dagger,x)$
+for each of the three parametric families: $\mathcal F_1$, the Gamma and the Normal. Plot the computed confidence bands in the range $x\in(-3,3)$ for each parametric family and comment on the differences obtained.
+
+
+### Question 8 Solution
+
+
+```{r}
+# Your code here
+```
+
+

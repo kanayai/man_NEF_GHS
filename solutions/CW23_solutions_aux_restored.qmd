@@ -1,0 +1,756 @@
+---
+title: 'Coursework solutions'
+author: "MA40198: Applied Statistical Inference"
+format: 
+  html:
+    toc: true
+    code-fold: true
+    embed-resources: true
+    include-in-header: 
+        - mathjax_header.html
+---
+
+# Preliminaries
+
+
+
+
+
+
+Consider  the following parametric family of probability density functions:
+ 
+$$
+\mathcal F_1 =
+\left\{
+f(y|\bm{\lambda})=\exp(\lambda_1 \,y+\lambda_2 \log(\cos(\lambda_1)))\,g(y|\lambda_2) \,:\, -\frac{\pi}{2}<\lambda_1<\frac{\pi}{2}, \lambda_2>0 
+\right\}
+$$ 
+
+The function $g(y|\lambda_2)$ is itself a probability density function given by:
+$$
+g(y|\lambda_2)=\frac{2^{\lambda_2-2}\Gamma^2\left(\frac{\lambda_2}{2}\right)}{\pi\Gamma(\lambda_2)}\prod_{j=0}^\infty \left\{1+\left(\frac{y}{\lambda_2+2j}\right)^2\right\}^{-1}\,,\quad y \in \rel
+$$
+
+Here 
+
+$$
+\Gamma(x)=\int_{0}^\infty t^{x-1}\exp(-t)dt\,,\quad x>0
+$$  
+
+is the standard Gamma function.
+
+For any computations involving $g(y|\lambda_2)$ you should use the following approximation:
+
+$$
+g_N(y|\lambda_2)=\frac{2^{\lambda_2-2}\Gamma^2\left(\frac{\lambda_2}{2}\right)}{\pi\Gamma(\lambda_2)}\prod_{j=0}^N \left\{1+\left(\frac{y}{\lambda_2+2j}\right)^2\right\}^{-1}\,,\quad y \in \rel
+$$
+
+Unless otherwise stated, you should use $N=10,000$.
+
+
+# Questions
+
+## Question 1 
+
+Consider the following observed sample: 
+
+```{r}
+#| code-fold: show
+y_sample_q1 <- scan("http://people.bath.ac.uk/kai21/ASI/CW_2023/y_sample_q1.txt")
+```
+
+Plot 40 contours of the negative loglikelihood function of the parameter $\bm{\lambda}$ over the region defined by $-\pi/2<\lambda_1<\pi/2$ and $0<\lambda_2<50$. The contours should be sufficiently smooth and cover the entire region. You should indicate a smaller region delimited by a contour that contains the global minimum.
+
+
+
+
+## Solution to Question 1
+
+The family $\mathcal F$ is called the Generalised Hyperbolic Secant (GHS). The log of the densities is given by:
+
+$$
+\log f(y|\lambda_1,\lambda_2)=(\lambda_2-2)\log 2+2\log \Gamma\left(\frac{\lambda_2}{2}\right)-\log \pi -\log \Gamma(\lambda_2)
+-\sum_{j=0}^N \log \left(1+\frac{y^2}{(\lambda_2+2j)^2}\right)
++ \lambda_1 y+\lambda_2 \log(\cos(\lambda_1))
+$$
+
+
+We can define $\log f(y|\lambda_1,\lambda_2)=-\infty$ if either $|\lambda_1|>\pi/2$ or $\lambda_2\leq 0$. 
+
+
+
+```{r}
+
+# density of the generalised hyperbolic secant distribution
+dghs <-function(y,
+               lambda1 = 0, # lambda1 is bounded between +- pi/2
+               lambda2 = 1 , # lambda2 is positive
+               log   = F,
+               N     = 1000){
+
+# computes log density by default as is more numerically stable
+  
+if ((abs(lambda1)>pi/2)|(lambda2<=0)){
+  res <- -Inf
+}else{  
+  aux <- function(y,lambda1,lambda2,N){
+      (lambda2-2)*log(2)+
+        2*lgamma(lambda2/2)-
+          log(pi)-
+            lgamma(lambda2)-
+              sum(log(1+((y/(lambda2+2*(0:N)))^2)))+
+                lambda1*y+lambda2*log(cos(lambda1))
+}
+
+# Use sapply to vectorise the log density wrt to the sample vector y
+res<-sapply(y,
+            FUN   = aux,
+            lambda1 = lambda1,
+            lambda2 = lambda2,
+            N     = N)
+
+}
+
+if (!log){
+  res <- exp(res) # returns the density if needed 
+}
+
+res
+
+}
+```
+
+
+Next we code for negative loglikelihood function $\phi(\bm{\lambda}|\bm{y})$ in a format appropriate for plotting the contours.
+
+```{r}
+
+nll_plot <-  function(lambda1,
+                      lambda2,
+                      y,
+                      N=1000){
+  
+  
+  sum_log_dens<-function(y,lambda1,lambda2,N){
+    sum(dghs(y,lambda1,lambda2,log = TRUE))
+  }
+  
+  -mapply(FUN      = sum_log_dens,
+          lambda1    = lambda1,
+          lambda2       = lambda2,
+          MoreArgs = list(y = y,
+                          N = N))
+  
+}
+
+
+```
+
+
+Now we plot the contours of $\phi(\bm{\lambda}|\bm{y})$
+
+```{r}
+#| fig-width: 12
+#| fig-height: 16
+#| fig-cap: Contours of the negative loglikelihood (red contour conatins the globsal minimum)
+
+N_grid      <- 100
+
+
+lambda1_grid <- seq(from   = -1.57,
+                   to     = 1.57,
+                   length = N_grid)
+
+theta2_grid <- seq(from   = 0.1,
+                   to     = 50,
+                   length = N_grid)
+
+
+
+
+nll_grid <- outer(X   = lambda1_grid,
+                  Y   = theta2_grid,
+                  FUN = nll_plot ,
+                  y=y_sample_q1,
+                  N=10000)
+
+
+
+levels <-quantile(x     = nll_grid,
+                 probs = seq(from   = (0.01),
+                                 to     = (0.99),
+                                 length = 40))
+
+
+
+
+contour(x      = lambda1_grid,
+        y      = theta2_grid,
+        z      = nll_grid,
+        levels = levels,
+        xlab   = expression(lambda[1]),
+        ylab   = expression(lambda[2]))
+
+contour(x      = lambda1_grid,
+        y      = theta2_grid,
+        z      = nll_grid,
+        levels =levels[1],
+        col="red",
+        add=T)
+
+
+```
+
+We can see that the region inside the red countour contains the global minimum. Clearly, the contour levels increase as we smoothly move away from the red region. The negative loglikelihood increases towards infinity when we approach the boundaries given $\lambda_2=0$ and $\lambda_1 =\pm \pi/2$. The limit when $\lambda_2\to \infty$ seems to be regular in the sense that all the contour values cross the horizontal line $\lambda_2=k$ for large enough $k$ which indicates that, in the limit  the negative loglikelihood of $\lambda_1$ is well defined and has a minimum.
+
+## Question 2 
+
+Find the maximum likelihood estimate $\widehat{\lambda}=(\hat{\lambda}_1,\hat{\lambda}_2)^T$ by 
+picking the best out of 100 optimisations (using the BFGS algorithm) where each optimisation uses a different initial value. The following data frame gives the list of  initial values to be used.
+
+```{r}
+#| code-fold: show
+ L0 <-read.table("http://people.bath.ac.uk/kai21/ASI/CW_2023/starting_vals_q2.txt")
+```
+
+
+
+## Solution to Question 2
+
+However, in order to perform unconstrained optimisation, we will reparametrise using the following transformation
+
+$$
+\bm{\lambda} =
+\bm{g}(\bm{\theta})
+=
+\begin{pmatrix}
+\atan(\theta1)\\
+\exp(\theta2)
+\end{pmatrix}
+$$
+ 
+We code first the density as a function of the log density.
+
+```{r}
+expr_log_dens <- 
+  expression(
+    (
+      atan(theta1)*y+exp(theta2)*log(cos(atan(theta1)))+
+        (exp(theta2)-2)*log(2)+
+          2*lgamma(exp(theta2)/2)-
+            log(pi)-
+              lgamma(exp(theta2)))/(N+1)-
+                log(1+((y/(exp(theta2)+2*j))^2))
+    )
+
+```
+
+Note how we divide by $N+1$ to account later for the sum $\sum_{j=0}^N$
+
+```{r}
+
+
+deriv_log_dens <- deriv(expr   = expr_log_dens,
+                  namevec      = c("theta1","theta2"),
+                  function.arg = c("theta1","theta2","y","j","N"),
+                  hessian      = F)
+
+nll    <- function(theta = c(0,0),
+                     y     = 1,
+                     N     = 1000){
+  
+  n   <- length(y)
+  nld <- rep(NA,n)
+  
+  for (i in 1:n){
+    aux  <- deriv_log_dens(theta1 = theta[1],
+                           theta2 = theta[2],
+                               y  = y[i],
+                               j  = 0:N,
+                               N  = N)
+  
+    nld[i] <- sum(as.numeric(aux))
+  
+  }
+ res <- -sum(nld)
+  
+ 
+  
+res
+ 
+}
+
+# quick tests
+
+nll(c(0.5,1.5),y=y_sample_q1,N=1000)
+
+nll(c(0.5,1.5),y=y_sample_q1,N=1000)
+
+```
+
+Now the gradient
+
+```{r}
+
+grad_nll <- function(theta = c(1,1),
+                     y     = 1,
+                     N     = 1000){
+  
+  n    <- length(y)
+  grad <- matrix(NA,n,2)
+  
+  for (i in 1:n){
+    aux  <- deriv_log_dens(theta1 = theta[1],
+                           theta2 = theta[2],
+                                y  = y[i],
+                                j  = 0:N,
+                                N  = N)
+  
+    grad[i,1:2] <- apply(attr(aux,"gradient"),2,sum)
+  
+  }
+  
+ -colSums(grad)
+ 
+}
+
+
+# quick tests
+grad_nll(c(0.5,1.5),y=y_sample_q1,N=1000)
+grad_nll(c(0.5,1.5),y=y_sample_q1,N=10000)
+
+
+
+
+```
+
+
+
+
+The gradient of the log density is given by:
+ 
+$$
+\begin{split}
+\nabla_{\!\bm{\lambda}} \log f(y|\bm{\lambda})
+&=
+\begin{pmatrix}
+\displaystyle\frac{d}{d\lambda_1}\log f(y|\bm{\lambda}) \\
+\displaystyle\frac{d}{d\lambda_2}\log f(y|\bm{\lambda})
+\end{pmatrix}
+\\
+\rule{0in}{7ex}&=
+\begin{pmatrix}
+\displaystyle y-\lambda_2 \tan(\lambda_1) \\
+\displaystyle \log 2+\psi\left(\frac{\lambda_2}{2}\right)-\psi(\lambda_2)+2\sum_{j=0}^N\frac{y^2}{(\lambda_2+2j)[y^2 +(\lambda_2+2j)^2]}+
+\log(\cos(\lambda_1))
+\end{pmatrix}
+\end{split}
+$$
+
+Therefore, the gradient of the loglikelihood is given by
+
+$$
+\nabla_{\!\bm{\lambda}} \ell(\bm{\lambda}|\bm{y})
+=
+\begin{pmatrix}
+\displaystyle \sum_{i=1}^n y_i-n\,\lambda_2 \tan(\lambda_1) \\
+\displaystyle n\, \log 2+- n\,\psi\left(\frac{\lambda_2}{2}\right)-n\,\psi(\lambda_2)+2\sum_{i=1}^n\sum_{j=0}^N\frac{y_i^2}{(\lambda_2+2j)[y_i^2 +(\lambda_2+2j)^2]}+
+n\,\log(\cos(\lambda_1))
+\end{pmatrix}
+$$
+
+We now code the negative loglikelihood function in a format suitable for `optim`
+
+```{r}
+
+nll <-  function(par,y,N=1000){
+  
+  lambda1 <- par[1]
+  lambda2 <- par[2]
+  
+  nll_plot(lambda1,lambda2,y,N)
+  
+}
+
+
+```
+
+Also code the gradient of negative loglikelihood function in a format suitable for `optim`
+
+```{r}
+
+grad_nll <- function(par,y,N=1000){
+  
+  lambda1 <- par[1]
+  lambda2 <- par[2]
+  
+  log_der_neg_dghs <- function(y,lambda1,lambda2,N){
+  
+  aux <- function(y,lambda1,lambda2,N){
+    res1<- 
+    log(2)+
+       digamma(lambda2/2)-
+        digamma(lambda2)+
+          2*sum((y^2)/((lambda2+2*(0:N))*(y^2+(lambda2+2*(0:N))^2)))+
+            log(cos(lambda1))
+    c(y-lambda2*tan(lambda1),res1)
+  }
+  
+  -rowSums(sapply(y,
+          FUN = aux,
+          lambda1 = lambda1,
+          lambda2 = lambda2,
+          N   = N))
+  
+}
+  
+  mapply(lambda1,
+         lambda2,
+         FUN = log_der_neg_dghs,
+         MoreArgs = list(y = y,
+                         N = N))
+  
+}
+
+```
+
+```{r}
+
+
+
+
+
+fit_optim<- function(L0,
+                     fn,
+                     gr,
+                     y,
+                     N=1000){
+
+fit <- vector("list",length = dim(L0)[1])
+
+for (i in 1:dim(L0)[1]){
+
+fit[[i]]<- optim(par = L0[i,],
+                     fn = fn,
+                     gr = gr ,
+                     method = "BFGS",
+                     hessian   = T,
+                     y = y,
+                     N = N)
+
+  
+  
+}
+
+extract_negloglik <- 
+  function(optim_object){
+      optim_object$value
+  }
+# selects the best optimisation with minimum negative loglikelihood
+nll_vals<-
+  sapply(X   = fit,
+        FUN  = extract_negloglik)
+
+fit_q1<-fit[[which.min(nll_vals)]] 
+# returns the final selected optimisation
+}
+
+```
+
+The best optimisation out of the 100 is given by
+
+```{r}
+
+fit_q1<-fit_optim(L0=L0,
+                     fn = nll ,
+                     gr = grad_nll,
+                     y = y_sample_q1,
+                     N = 1000)
+fit_q1
+```
+
+We now replot the contours  to numerically verify the minimum is in the region indicated above.
+
+```{r,cache=TRUE}
+#| fig-width: 12
+#| fig-height: 16
+
+
+
+contour(x      = lambda1_grid,
+        y      = theta2_grid,
+        z      = nll_grid,
+        levels = levels,
+        xlab   = expression(lambda[1]),
+        ylab   = expression(lambda[2]))
+
+contour(x      = lambda1_grid,
+        y      = theta2_grid,
+        z      = nll_grid,
+        levels =levels[1],
+        col="red",
+        add=T)
+
+
+points(x= fit_q1$par[1],
+       y = fit_q1$par[2],
+       col="red",
+       pch=16)
+```
+
+We also check that the Hessian  in the last interation, by computing its eigenvalues.
+
+```{r}
+eigen(fit_q1$hessian)$values
+```
+
+both are positive so the Hessian is positive definite.
+
+## Question 3 
+
+
+Check the sensitivity of the MLE to the choice of $N$ by plotting (separately) the values of $\hat{\lambda}_1$ and $\hat{\lambda}_2$ as function of $\log_{10}(N)$. You should use the values $10^1,10^2, 10^3,10^4,10^5,10^6$ for $N$. What conclusions can you make from these two plots?
+
+## Solution Question 3
+
+```{r,cache=T}
+
+NN <- 10^{c(1,2,3,4,5,6)}
+NN <- 10^{c(1,2,3,4)}
+
+fit_q3 <- vector("list",length =5)
+lam1 <- rep(NA,5)
+lam2 <- rep(NA,5)
+for (i in 1:5){
+  
+  
+  fit_q3[[i]]<-fit_optim(L0=L0,
+                     fn = nll ,
+                     gr = grad_nll,
+                     y = y_sample_q1,
+                     N = NN[i])
+  
+  lam1[i] <- fit_q3[[i]]$par[1]
+  lam2[i] <- fit_q3[[i]]$par[2]
+}
+
+par(mfrow=c(1,2))
+plot(log(NN,10),lam1,type = "l",
+     xlab = "log10(N)",ylab=expression(hat(lambda)[1]))
+plot(log(NN,10),lam2,type = "l",
+     xlab = "log10(N)",ylab=expression(hat(lambda)[2]))
+
+```
+
+The plots are fairly constant so the sensitivity of the MLE's to the chosen value of $N$ is low.
+
+## Question 4 
+
+Compute the maximum likelihood estimate of the mean parameter
+$$\mu(\bm{\lambda}_*)=E[Y|\bm{\lambda}_*]=\int_\rel f(y|\bm{\lambda}_*)dy$$
+Also compute an asymptotic 95% confidence interval for $\mu(\bm{\lambda}_*)$. State clearly any assumptions you have made.
+
+## Solution to Question 4
+
+Let $$\Psi(\bm{\lambda})=-\lambda_2\,\log(\cos(\lambda_1))$$
+From the definition of the density we have that
+
+$$
+\Psi(\bm{\lambda})=\log \left(\int_\rel \exp(\lambda_1\,y) g(y|\lambda_2)\,dy \right)
+$$
+
+Assuming that we can interchange derivative with integrals we have
+
+
+$$
+\begin{split}
+\frac{d}{d\lambda_1}\Psi(\bm{\lambda})
+&= 
+\frac{\displaystyle \frac{d}{d\lambda_1}\int_\rel \exp(\lambda_1\,y) g(y|\lambda_2)\,dy}
+{\exp(\Psi(\bm{\lambda}))}\\
+&=
+\frac{\displaystyle \int_\rel \frac{d}{d\lambda_1}\exp(\lambda_1\,y) g(y|\lambda_2)\,dy}
+{\exp(\Psi(\bm{\lambda}))}\\
+&=
+\frac{\displaystyle \int_\rel y\exp(\lambda_1\,y) g(y|\lambda_2)\,dy}
+{\exp(\Psi(\bm{\lambda}))}\\
+&=
+ \int_\rel y f(y|\bm{\lambda})\,dy\\
+\rule{0in}{3ex}&= 
+E[Y|\bm{\lambda}]
+\end{split}
+$$
+
+Therefore we have
+
+$$\mu(\bm{\lambda})=\frac{d}{d\lambda_1}\Psi(\bm{\lambda})=\lambda_2\,\tan(\lambda_1)$$
+
+Using the first equation of the stationary system 
+$$\nabla_{\!\bm{\lambda}} \ell(\bm{\lambda}|\bm{y}) = \bm{0}_2$$
+
+we obtain
+
+$$\widehat{\mu(\bm{\lambda}^*)}=\mu(\widehat{\bm{\lambda}})=\hat{\lambda}_2\,\tan(\hat{\lambda}_1)=\frac{\sum_{i=1}^n y_i}{n}=\bar{y}=\mbox{`r mean(y_sample_q1)`}$$
+
+
+Let $g(\bm{\lambda})=\lambda_2\tan(\lambda_2)$
+then, the Jacobian is given is given by
+
+$$\bm{J}_g(\bm{\lambda})=\left[\nabla_{\!\bm{\lambda} g(\bm{\lambda})}\right]^T=\left(\lambda_2(1+\tan^2(\lambda_1)),\tan(\lambda_1)\right)$$
+
+Then we use the Delta method, specifically the alternative version in Proposition 3.4 that used Fisher's observed information matrix, to obtain the confidence interval
+
+```{r}
+mu_hat <-mean(y_sample_q1)
+lambda1_hat <- fit_q1$par[1]
+lambda2_hat <- fit_q1$par[2]
+J<-c(lambda2_hat*(1+(mu_hat/lambda2_hat)^2),mu_hat/lambda2_hat)
+I_obs<-fit_q1$hessian
+
+V <-as.numeric(J%*% solve(I_obs)%*%(J))
+
+# conf int
+
+c(mu_hat-1.9599*sqrt(V),mu_hat+1.9599*sqrt(V))
+
+```
+
+
+
+
+
+
+## Question 5 
+
+Compute an asymptotic 95% confidence interval for the unknown parameter $\lambda^*_2$
+
+* Using the asymptotic normal approximation of $\hat{\lambda}_2$
+
+* Using the asymptotic normal approximation of $\log( \hat{\lambda}_2)$
+
+
+
+
+
+## Solution to Question 5
+
+Using the asymptotic normal approximation of $\hat{\lambda}_2$ we have
+
+```{r}
+
+V <-solve(I_obs)[2,2]
+
+# conf int
+
+c(lambda2_hat-1.9599*sqrt(V),lambda2_hat+1.9599*sqrt(V))
+
+```
+
+
+Using the asymptotic normal approximation of $\log(\hat{\lambda}_2)$ we can use the delta method with $g(\bm{\lambda})=\log(\lambda_2)$ and the Jacobian is now
+$$\bm{J}_g((\bm{\lambda})=(0,1/\lambda_2)$$
+therefore we have
+
+```{r}
+
+J<-c(0,1/lambda2_hat)
+
+V <-as.numeric(J%*% solve(I_obs)%*%(J))
+
+# conf int
+
+exp(c(log(lambda2_hat)-1.9599*sqrt(V),log(lambda2_hat)+1.9599*sqrt(V)))
+
+```
+
+The  intervals a re a bit different but we tend to like the asymmetric one constructed using $\log(\lambda_2)$ as this one will always be positive while the other one might negative of $lambda_2 $ is close enough to zero.
+
+
+## Question 6 
+
+
+Use the generalised likelihood ratio to test the hypotheses:
+
+$$H_0:\,\mu(\bm{\lambda}_*)=5\qquad \mbox{vs}\qquad H_a:\,\mu(\bm{\lambda}_*)\neq 5$$
+
+using a significance level $\alpha=0.05$.
+
+Separately, also test 
+
+$$H_0:\,\lambda^*_2=5\qquad \mbox{vs}\qquad H_a:\,\lambda^*_2\neq 5$$
+
+using a significance level $\alpha=0.05$.
+
+
+## Solution to Question 6
+
+
+
+```{r}
+nll_theta2 <- function(theta2,y,N=10000,mu){
+  
+  par_old<-c(atan(mu*exp(-theta2)),exp(theta2))
+  
+  nll(par_old,y=y,N=N)
+}
+log(lambda2_hat)
+fit_q6<-optimise(nll_theta2,c(0,3),y=y_sample_q1,N=10000,mu=5)
+fit_q6
+
+
+```
+
+```{r}
+glrt <-2*(-fit_q1$value+fit_q6$objective)
+glrt
+
+crit_val <-qchisq(0.95,1)
+
+# reject?
+
+glrt>crit_val
+```
+
+We do not reject the null hypothesis. 
+This is expected from the plots below.
+
+
+```{r}
+
+t2 <- seq(1.5,2,length=1000)
+nll_mu <-rep(NA, 1000)
+
+
+
+for (i in 1:1000){
+nll_mu[i]<- nll_theta2(t2[i],y_sample_q1,mu=5)
+}
+
+par(mfrow=c(1,2))
+
+plot(t2,nll_mu,type="l")
+abline(v=log(lambda2_hat),col="grey")
+abline(v=fit_q6$minimum,col="red")
+
+contour(x      = lambda1_grid,
+        y      = theta2_grid,
+        z      = nll_grid,
+        levels = levels,
+        xlab   = expression(lambda[1]),
+        ylab   = expression(lambda[2]))
+
+
+ t2<-seq(-2,20,length=100)
+ x=atan(5/exp(t2))
+ y<-exp(t2)
+ lines(x,y,col="green")
+
+```
+
+
+On the left we have the comparison between the MLE of $\theta_2$ when $\mu=5$ (red) to when $\mu$ is unrestricted, the difference is very small both in terms of the actual estimate and the difference in negative loglikelihood.
+
+On the right we have the green line that represents all the parameter values in the $\bm{\lambda}$ parametrisation that satisfy the null hypothesis of $\mu=5$. The smaller contour value cross this green line which gives evidence towards the null hypothesis.
+
+
+
